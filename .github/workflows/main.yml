@@ -1,0 +1,28 @@
+name: Run Telegram Bot
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # hər 5 dəqiqədə run
+  workflow_dispatch:  # istəyə bağlı run
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install python-telegram-bot==20.6 feedparser asyncio
+
+      - name: Run Bot
+        run: python bot.py
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
