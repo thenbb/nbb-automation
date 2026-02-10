@@ -5,7 +5,7 @@ import logging
 import os
 
 # ================== SETTINGS ==================
-TOKEN = os.environ.get("8429753892:AAFokEHqXAEjMcTiNO5nTX9qqwssqeitbSQ")  # Telegram token GitHub Secrets-də olacaq
+TOKEN = os.environ.get("BOT_TOKEN")  # Telegram token GitHub Secrets-də olacaq
 CHANNEL_ID = "@NBBWorld"
 SENT_LINKS_FILE = "sent_links.txt"  # Təkrar linklərin saxlanması
 
