@@ -52,9 +52,7 @@ async def fetch_and_send():
             f.write(link + "\n")
 
 async def main():
-    while True:
-        await fetch_and_send()
-        await asyncio.sleep(300)
+    await fetch_and_send()
 
 if __name__ == "__main__":
     asyncio.run(main())
