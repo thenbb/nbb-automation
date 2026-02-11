@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install python-telegram-bot==20.6 feedparser
+          pip install python-telegram-bot==20.6 feedparser requests beautifulsoup4
 
       - name: Run Bot
         run: python bot.py
