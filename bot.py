@@ -4,6 +4,8 @@ from telegram import Bot
 import asyncio
 import logging
 import hashlib
+import requests
+from bs4 import BeautifulSoup
 
 # ================== SETTINGS ==================
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -18,28 +20,52 @@ RSS_URLS = [
 ]
 
 MAX_NEWS_PER_FEED = 2
+SENT_LINKS_FILE = "sent_links.txt"
 # ==============================================
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 
-sent_links = set()
-
+# Hash-based duplicate protection
 def generate_hash(link):
     return hashlib.md5(link.encode()).hexdigest()
 
+# Read sent links from file
+def load_sent_links():
+    try:
+        with open(SENT_LINKS_FILE, "r") as f:
+            return set(f.read().splitlines())
+    except FileNotFoundError:
+        return set()
+
+# Write updated links to file
+def save_sent_links(sent_links):
+    with open(SENT_LINKS_FILE, "w") as f:
+        for link in sent_links:
+            f.write(link + "\n")
+
+# Resolve Google redirect links
+def resolve_google_link(url):
+    try:
+        if "news.google.com" in url:
+            resp = requests.get(url, allow_redirects=True, timeout=5)
+            return resp.url
+    except Exception:
+        return url
+    return url
+
 async def fetch_and_send():
-    global sent_links
+    sent_links = load_sent_links()
 
     for rss in RSS_URLS:
         feed = feedparser.parse(rss)
-
         if not feed.entries:
             logging.warning(f"RSS işləmədi: {rss}")
             continue
 
         for entry in feed.entries[:MAX_NEWS_PER_FEED]:
-            link_hash = generate_hash(entry.link)
+            real_link = resolve_google_link(entry.link)
+            link_hash = generate_hash(real_link)
 
             if link_hash in sent_links:
                 continue
@@ -51,7 +77,7 @@ async def fetch_and_send():
 
 📰 <b>{entry.title}</b>
 
-🔗 <a href="{entry.link}">Read full article</a>
+🔗 <a href="{real_link}">Read full article</a>
 """
 
             try:
@@ -67,6 +93,8 @@ async def fetch_and_send():
                 logging.error(f"Göndərmə xətası: {e}")
 
             await asyncio.sleep(2)
+
+    save_sent_links(sent_links)
 
 async def main():
     await fetch_and_send()
