@@ -5,6 +5,7 @@ import asyncio
 import logging
 import hashlib
 import requests
+from urllib.parse import urlparse, urlunparse
 
 # ================== SETTINGS ==================
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -25,24 +26,30 @@ SENT_LINKS_FILE = "sent_links.txt"
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 
-# Hash-based duplicate protection
-def generate_hash(link):
-    return hashlib.md5(link.encode()).hexdigest()
+# ---------------- Helper Functions ----------------
 
-def load_sent_links():
+def generate_hash(value: str) -> str:
+    return hashlib.md5(value.encode()).hexdigest()
+
+def load_sent_links() -> set:
     try:
         with open(SENT_LINKS_FILE, "r") as f:
             return set(f.read().splitlines())
     except FileNotFoundError:
         return set()
 
-def save_sent_links(sent_links):
+def save_sent_links(sent_links: set):
     with open(SENT_LINKS_FILE, "w") as f:
         for link in sent_links:
             f.write(link + "\n")
 
-# Resolve Google redirect links
-def resolve_google_link(url):
+def clean_link(url: str) -> str:
+    """Query param-ları silərək linki təmizləyir"""
+    parsed = urlparse(url)
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+
+def resolve_google_link(url: str) -> str:
+    """Google News redirect-lərini həll edir"""
     try:
         if "news.google.com" in url:
             resp = requests.get(url, allow_redirects=True, timeout=5)
@@ -50,6 +57,15 @@ def resolve_google_link(url):
     except Exception:
         return url
     return url
+
+def get_unique_id(entry) -> str:
+    """Duplicate protection üçün universal ID"""
+    if hasattr(entry, 'id') and entry.id:
+        return entry.id
+    # Google News üçün redirect-i həll et və linki təmizlə
+    return clean_link(resolve_google_link(entry.link))
+
+# ---------------- Main Function ----------------
 
 async def fetch_and_send():
     sent_links = load_sent_links()
@@ -61,11 +77,11 @@ async def fetch_and_send():
             continue
 
         for entry in feed.entries[:MAX_NEWS_PER_FEED]:
-            real_link = resolve_google_link(entry.link)
-            link_hash = generate_hash(real_link)
+            unique_id = get_unique_id(entry)
+            link_hash = generate_hash(unique_id)
 
             if link_hash in sent_links:
-                continue
+                continue  # Already sent
 
             sent_links.add(link_hash)
 
@@ -74,7 +90,7 @@ async def fetch_and_send():
 
 📰 <b>{entry.title}</b>
 
-🔗 <a href="{real_link}">Read full article</a>
+🔗 <a href="{resolve_google_link(entry.link)}">Read full article</a>
 """
 
             try:
