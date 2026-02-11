@@ -1,14 +1,13 @@
+import os
 import feedparser
 from telegram import Bot
 import asyncio
 import logging
-import os
 
 # ================== SETTINGS ==================
-TOKEN = os.environ.get("BOT_TOKEN")  # GitHub Secrets-dən oxunur
-CHANNEL_ID = "@NBBWorld"             # Kanal username-i
-SENT_LINKS_FILE = "sent_links.txt"   # Göndərilmiş linkləri saxlamaq üçün
-
+TOKEN = os.environ.get("BOT_TOKEN")  # GitHub Secrets-dən
+CHANNEL_ID = "@NBBWorld"  # Public kanal
+SENT_LINKS_FILE = "sent_links.txt"
 RSS_URLS = [
     "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
     "https://www.aljazeera.com/xml/rss/all.xml",
@@ -16,7 +15,6 @@ RSS_URLS = [
     "https://www.france24.com/en/rss",
     "https://www.reutersagency.com/feed/?best-topics=world&post_type=best"
 ]
-
 MAX_NEWS_PER_FEED = 3
 # ==============================================
 
@@ -30,6 +28,14 @@ async def fetch_and_send():
     except FileNotFoundError:
         sent_links = set()
 
+    # TEST mesajı → dərhal kanalı yoxlamaq üçün
+    try:
+        await bot.send_message(chat_id=CHANNEL_ID, text="💡 TEST MESAJI")
+        logging.info("TEST MESAJI göndərildi ✅")
+    except Exception as e:
+        logging.error(f"TEST mesajı xəta: {e}")
+
+    # RSS xəbərləri
     for rss in RSS_URLS:
         feed = feedparser.parse(rss)
         if not feed.entries:
