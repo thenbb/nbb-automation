@@ -3,11 +3,11 @@ import feedparser
 from telegram import Bot
 import asyncio
 import logging
+import hashlib
 
 # ================== SETTINGS ==================
-TOKEN = os.environ.get("BOT_TOKEN")  # GitHub Secrets-dən
-CHANNEL_ID = "@NBBWorld"             # Kanal username-i
-SENT_LINKS_FILE = "sent_links.txt"   # Göndərilmiş linkləri saxlamaq üçün
+TOKEN = os.environ.get("BOT_TOKEN")
+CHANNEL_ID = "@NBBWorld"
 
 RSS_URLS = [
     "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
@@ -17,49 +17,56 @@ RSS_URLS = [
     "https://www.reutersagency.com/feed/?best-topics=world&post_type=best"
 ]
 
-MAX_NEWS_PER_FEED = 3
+MAX_NEWS_PER_FEED = 2
 # ==============================================
 
-bot = Bot(token=TOKEN)
 logging.basicConfig(level=logging.INFO)
+bot = Bot(token=TOKEN)
+
+sent_links = set()
+
+def generate_hash(link):
+    return hashlib.md5(link.encode()).hexdigest()
 
 async def fetch_and_send():
-    # Əvvəlki linkləri yüklə
-    try:
-        with open(SENT_LINKS_FILE, "r") as f:
-            sent_links = set(f.read().splitlines())
-    except FileNotFoundError:
-        sent_links = set()
+    global sent_links
 
-    # TEST mesajı → dərhal yoxlamaq üçün
-    try:
-        await bot.send_message(chat_id=CHANNEL_ID, text="💡 TEST MESAJI")
-        logging.info("TEST MESAJI göndərildi ✅")
-    except Exception as e:
-        logging.error(f"TEST mesajı xəta: {e}")
-
-    # RSS xəbərləri
     for rss in RSS_URLS:
         feed = feedparser.parse(rss)
+
         if not feed.entries:
             logging.warning(f"RSS işləmədi: {rss}")
             continue
-        for entry in feed.entries[:MAX_NEWS_PER_FEED]:
-            if entry.link in sent_links:
-                continue
-            sent_links.add(entry.link)
-            message = f"📰 {entry.title}\n🔗 {entry.link}"
-            try:
-                await bot.send_message(chat_id=CHANNEL_ID, text=message)
-                logging.info(f"Göndərildi: {entry.title}")
-            except Exception as e:
-                logging.error(f"Xəta göndərərkən: {e}")
-            await asyncio.sleep(2)
 
-    # Göndərilmiş linkləri saxla
-    with open(SENT_LINKS_FILE, "w") as f:
-        for link in sent_links:
-            f.write(link + "\n")
+        for entry in feed.entries[:MAX_NEWS_PER_FEED]:
+            link_hash = generate_hash(entry.link)
+
+            if link_hash in sent_links:
+                continue
+
+            sent_links.add(link_hash)
+
+            message = f"""
+🌍 <b>NBB WORLD NEWS</b>
+
+📰 <b>{entry.title}</b>
+
+🔗 <a href="{entry.link}">Read full article</a>
+"""
+
+            try:
+                await bot.send_message(
+                    chat_id=CHANNEL_ID,
+                    text=message,
+                    parse_mode="HTML",
+                    disable_web_page_preview=False
+                )
+                logging.info(f"Göndərildi: {entry.title}")
+
+            except Exception as e:
+                logging.error(f"Göndərmə xətası: {e}")
+
+            await asyncio.sleep(2)
 
 async def main():
     await fetch_and_send()
