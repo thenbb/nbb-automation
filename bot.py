@@ -5,7 +5,6 @@ import asyncio
 import logging
 import hashlib
 import requests
-from bs4 import BeautifulSoup
 
 # ================== SETTINGS ==================
 TOKEN = os.environ.get("BOT_TOKEN")
@@ -30,7 +29,6 @@ bot = Bot(token=TOKEN)
 def generate_hash(link):
     return hashlib.md5(link.encode()).hexdigest()
 
-# Read sent links from file
 def load_sent_links():
     try:
         with open(SENT_LINKS_FILE, "r") as f:
@@ -38,7 +36,6 @@ def load_sent_links():
     except FileNotFoundError:
         return set()
 
-# Write updated links to file
 def save_sent_links(sent_links):
     with open(SENT_LINKS_FILE, "w") as f:
         for link in sent_links:
