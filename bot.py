@@ -5,18 +5,19 @@ import asyncio
 import logging
 import hashlib
 import requests
-from urllib.parse import urlparse, urlunparse
+from bs4 import BeautifulSoup
 
 # ================== SETTINGS ==================
 TOKEN = os.environ.get("BOT_TOKEN")
-CHANNEL_ID = "@NBBWorld"
+CHANNEL_ID = "@NBBWorld"  # Kanal username-i
 
 RSS_URLS = [
     "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
     "https://www.aljazeera.com/xml/rss/all.xml",
     "https://feeds.bbci.co.uk/news/rss.xml",
     "https://www.france24.com/en/rss",
-    "https://www.reutersagency.com/feed/?best-topics=world&post_type=best"
+    "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
+    "https://rss.cnn.com/rss/cnn_topstories.rss"
 ]
 
 MAX_NEWS_PER_FEED = 2
@@ -26,30 +27,24 @@ SENT_LINKS_FILE = "sent_links.txt"
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 
-# ---------------- Helper Functions ----------------
+# ---------- Duplicate Protection ----------
+def generate_hash(link):
+    return hashlib.md5(link.encode()).hexdigest()
 
-def generate_hash(value: str) -> str:
-    return hashlib.md5(value.encode()).hexdigest()
-
-def load_sent_links() -> set:
+def load_sent_links():
     try:
         with open(SENT_LINKS_FILE, "r") as f:
             return set(f.read().splitlines())
     except FileNotFoundError:
         return set()
 
-def save_sent_links(sent_links: set):
+def save_sent_links(sent_links):
     with open(SENT_LINKS_FILE, "w") as f:
         for link in sent_links:
             f.write(link + "\n")
 
-def clean_link(url: str) -> str:
-    """Query param-ları silərək linki təmizləyir"""
-    parsed = urlparse(url)
-    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
-
-def resolve_google_link(url: str) -> str:
-    """Google News redirect-lərini həll edir"""
+# ---------- Google News Link Resolve ----------
+def resolve_google_link(url):
     try:
         if "news.google.com" in url:
             resp = requests.get(url, allow_redirects=True, timeout=5)
@@ -58,15 +53,30 @@ def resolve_google_link(url: str) -> str:
         return url
     return url
 
-def get_unique_id(entry) -> str:
-    """Duplicate protection üçün universal ID"""
-    if hasattr(entry, 'id') and entry.id:
-        return entry.id
-    # Google News üçün redirect-i həll et və linki təmizlə
-    return clean_link(resolve_google_link(entry.link))
+# ---------- Get Thumbnail from link ----------
+def get_thumbnail(url):
+    try:
+        resp = requests.get(url, timeout=5)
+        soup = BeautifulSoup(resp.text, "html.parser")
+        og_img = soup.find("meta", property="og:image")
+        if og_img and og_img.get("content"):
+            return og_img["content"]
+    except Exception:
+        return None
+    return None
 
-# ---------------- Main Function ----------------
+# ---------- Get Video URL if exists ----------
+def get_video_url(entry):
+    # Check if media content or enclosure exists
+    media_content = entry.get("media_content", [])
+    if media_content:
+        return media_content[0].get("url")
+    enclosure = entry.get("enclosures", [])
+    if enclosure:
+        return enclosure[0].get("url")
+    return None
 
+# ---------- Fetch & Send ----------
 async def fetch_and_send():
     sent_links = load_sent_links()
 
@@ -77,31 +87,38 @@ async def fetch_and_send():
             continue
 
         for entry in feed.entries[:MAX_NEWS_PER_FEED]:
-            unique_id = get_unique_id(entry)
-            link_hash = generate_hash(unique_id)
+            # Stable link for duplicate check
+            link = entry.get("link", "")
+            real_link = resolve_google_link(link)
+            link_hash = generate_hash(real_link)
 
             if link_hash in sent_links:
-                continue  # Already sent
-
+                continue
             sent_links.add(link_hash)
 
-            message = f"""
-🌍 <b>NBB WORLD NEWS</b>
+            # Try to get thumbnail
+            thumbnail = get_thumbnail(real_link)
+            video_url = get_video_url(entry)
 
-📰 <b>{entry.title}</b>
-
-🔗 <a href="{resolve_google_link(entry.link)}">Read full article</a>
-"""
+            # Prepare message
+            message = f"🌍 <b>NBB WORLD NEWS</b>\n\n📰 <b>{entry.title}</b>\n\n🔗 <a href='{real_link}'>Read full article</a>"
 
             try:
-                await bot.send_message(
-                    chat_id=CHANNEL_ID,
-                    text=message,
-                    parse_mode="HTML",
-                    disable_web_page_preview=False
-                )
+                if video_url:
+                    await bot.send_video(
+                        chat_id=CHANNEL_ID,
+                        video=video_url,
+                        caption=message,
+                        parse_mode="HTML"
+                    )
+                else:
+                    await bot.send_message(
+                        chat_id=CHANNEL_ID,
+                        text=message,
+                        parse_mode="HTML",
+                        disable_web_page_preview=False if thumbnail else True
+                    )
                 logging.info(f"Göndərildi: {entry.title}")
-
             except Exception as e:
                 logging.error(f"Göndərmə xətası: {e}")
 
@@ -109,6 +126,7 @@ async def fetch_and_send():
 
     save_sent_links(sent_links)
 
+# ---------- Main ----------
 async def main():
     await fetch_and_send()
 
