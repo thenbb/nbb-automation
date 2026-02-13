@@ -5,11 +5,9 @@ import asyncio
 import logging
 import hashlib
 import requests
-from bs4 import BeautifulSoup
 
-# ================== SETTINGS ==================
 TOKEN = os.environ.get("BOT_TOKEN")
-CHANNEL_ID = "@NBBWorld"  # Kanal username-i
+CHANNEL_ID = "@NBBWorld"
 
 RSS_URLS = [
     "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
@@ -17,128 +15,78 @@ RSS_URLS = [
     "https://feeds.bbci.co.uk/news/rss.xml",
     "https://www.france24.com/en/rss",
     "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
-    "https://rss.cnn.com/rss/cnn_topstories.rss"
+    "http://rss.cnn.com/rss/edition_world.rss"
 ]
 
+SENT_FILE = "sent_links.txt"
 MAX_NEWS_PER_FEED = 2
-SENT_LINKS_FILE = "sent_links.txt"
-# ==============================================
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 
-# ---------- Duplicate Protection ----------
-def generate_hash(link):
-    return hashlib.md5(link.encode()).hexdigest()
 
-def load_sent_links():
+def load_sent():
     try:
-        with open(SENT_LINKS_FILE, "r") as f:
+        with open(SENT_FILE, "r") as f:
             return set(f.read().splitlines())
-    except FileNotFoundError:
+    except:
         return set()
 
-def save_sent_links(sent_links):
-    with open(SENT_LINKS_FILE, "w") as f:
-        for link in sent_links:
-            f.write(link + "\n")
 
-# ---------- Resolve Google News redirect ----------
-def resolve_google_link(url):
+def save_sent(data):
+    with open(SENT_FILE, "w") as f:
+        for x in data:
+            f.write(x + "\n")
+
+
+def real_link(url):
     try:
-        if "news.google.com" in url:
-            resp = requests.get(url, allow_redirects=True, timeout=5)
-            return resp.url
-    except Exception:
+        r = requests.get(url, timeout=5, allow_redirects=True)
+        return r.url
+    except:
         return url
-    return url
 
-# ---------- Get Thumbnail from link ----------
-def get_thumbnail(url):
-    try:
-        resp = requests.get(url, timeout=5)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        og_img = soup.find("meta", property="og:image")
-        if og_img and og_img.get("content"):
-            return og_img["content"]
-    except Exception:
-        return None
-    return None
 
-# ---------- Get Video URL if exists ----------
-def get_video_url(entry):
-    media_content = entry.get("media_content", [])
-    if media_content:
-        return media_content[0].get("url")
-    enclosure = entry.get("enclosures", [])
-    if enclosure:
-        return enclosure[0].get("url")
-    return None
+async def send_news(title, link, image=None):
+    text = f"🌍 <b>NBB WORLD NEWS</b>\n\n📰 <b>{title}</b>\n\n🔗 <a href='{link}'>Read full article</a>"
 
-# ---------- Fetch & Send ----------
-async def fetch_and_send():
-    sent_links = load_sent_links()
+    if image:
+        await bot.send_photo(CHANNEL_ID, image, caption=text, parse_mode="HTML")
+    else:
+        await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
+
+
+async def main():
+    sent = load_sent()
 
     for rss in RSS_URLS:
         feed = feedparser.parse(rss)
-        if not feed.entries:
-            logging.warning(f"RSS işləmədi: {rss}")
-            continue
 
         for entry in feed.entries[:MAX_NEWS_PER_FEED]:
-            link = entry.get("link", "")
-            if not link:
+
+            link = real_link(entry.link)
+            h = hashlib.md5(link.encode()).hexdigest()
+
+            if h in sent:
                 continue
 
-            real_link = resolve_google_link(link)
-            link_hash = generate_hash(real_link)
+            image = None
 
-            if link_hash in sent_links:
-                continue
-            sent_links.add(link_hash)
+            if "media_content" in entry:
+                image = entry.media_content[0]["url"]
 
-            # Prepare message
-            message = f"🌍 <b>NBB WORLD NEWS</b>\n\n📰 <b>{entry.title}</b>\n\n🔗 <a href='{real_link}'>Read full article</a>"
+            elif "links" in entry:
+                for l in entry.links:
+                    if l.type.startswith("image"):
+                        image = l.href
 
-            thumbnail = get_thumbnail(real_link)
-            video_url = get_video_url(entry)
+            await send_news(entry.title, link, image)
 
-            try:
-                if video_url:
-                    await bot.send_video(
-                        chat_id=CHANNEL_ID,
-                        video=video_url,
-                        caption=message,
-                        parse_mode="HTML"
-                    )
-                elif thumbnail:
-                    # Photo + caption format
-                    await bot.send_photo(
-                        chat_id=CHANNEL_ID,
-                        photo=thumbnail,
-                        caption=message,
-                        parse_mode="HTML"
-                    )
-                else:
-                    # Normal text link
-                    await bot.send_message(
-                        chat_id=CHANNEL_ID,
-                        text=message,
-                        parse_mode="HTML",
-                        disable_web_page_preview=False
-                    )
-                logging.info(f"Göndərildi: {entry.title}")
-
-            except Exception as e:
-                logging.error(f"Göndərmə xətası: {e}")
-
+            sent.add(h)
             await asyncio.sleep(2)
 
-    save_sent_links(sent_links)
+    save_sent(sent)
 
-# ---------- Main ----------
-async def main():
-    await fetch_and_send()
 
 if __name__ == "__main__":
     asyncio.run(main())
