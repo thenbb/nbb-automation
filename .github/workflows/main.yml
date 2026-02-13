@@ -29,4 +29,4 @@ jobs:
       - name: Run Bot
         run: python bot.py
         env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}   # Tokeni GitHub Secrets-də saxlayın
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}   # Telegram token GitHub Secrets-də saxlanacaq
