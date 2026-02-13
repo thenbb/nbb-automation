@@ -43,7 +43,7 @@ def save_sent_links(sent_links):
         for link in sent_links:
             f.write(link + "\n")
 
-# ---------- Google News Link Resolve ----------
+# ---------- Resolve Google News redirect ----------
 def resolve_google_link(url):
     try:
         if "news.google.com" in url:
@@ -67,7 +67,6 @@ def get_thumbnail(url):
 
 # ---------- Get Video URL if exists ----------
 def get_video_url(entry):
-    # Check if media content or enclosure exists
     media_content = entry.get("media_content", [])
     if media_content:
         return media_content[0].get("url")
@@ -87,8 +86,10 @@ async def fetch_and_send():
             continue
 
         for entry in feed.entries[:MAX_NEWS_PER_FEED]:
-            # Stable link for duplicate check
             link = entry.get("link", "")
+            if not link:
+                continue
+
             real_link = resolve_google_link(link)
             link_hash = generate_hash(real_link)
 
@@ -96,12 +97,11 @@ async def fetch_and_send():
                 continue
             sent_links.add(link_hash)
 
-            # Try to get thumbnail
-            thumbnail = get_thumbnail(real_link)
-            video_url = get_video_url(entry)
-
             # Prepare message
             message = f"🌍 <b>NBB WORLD NEWS</b>\n\n📰 <b>{entry.title}</b>\n\n🔗 <a href='{real_link}'>Read full article</a>"
+
+            thumbnail = get_thumbnail(real_link)
+            video_url = get_video_url(entry)
 
             try:
                 if video_url:
@@ -111,14 +111,24 @@ async def fetch_and_send():
                         caption=message,
                         parse_mode="HTML"
                     )
+                elif thumbnail:
+                    # Photo + caption format
+                    await bot.send_photo(
+                        chat_id=CHANNEL_ID,
+                        photo=thumbnail,
+                        caption=message,
+                        parse_mode="HTML"
+                    )
                 else:
+                    # Normal text link
                     await bot.send_message(
                         chat_id=CHANNEL_ID,
                         text=message,
                         parse_mode="HTML",
-                        disable_web_page_preview=False if thumbnail else True
+                        disable_web_page_preview=False
                     )
                 logging.info(f"Göndərildi: {entry.title}")
+
             except Exception as e:
                 logging.error(f"Göndərmə xətası: {e}")
 
