@@ -1,32 +1,38 @@
-name: Run Telegram Bot
+name: NBB News Bot
 
 on:
   schedule:
-    - cron: '*/5 * * * *'  # hər 5 dəqiqədə run
-  workflow_dispatch:       # manual run üçün
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
 
     steps:
-      # Repo-dan kodu yoxla
-      - uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      # Python mühiti qur
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      # Asılılıqları quraşdır
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install python-telegram-bot==20.6 feedparser requests beautifulsoup4
+          pip install feedparser
+          pip install python-telegram-bot
+          pip install requests
 
-      # Botu run et
-      - name: Run Bot
-        run: python bot.py
+      - name: Run bot
         env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}   # Telegram token GitHub Secrets-də saxlanacaq
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: python bot.py
+
+      - name: Save sent links (prevent duplicates)
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add sent_links.txt
+          git commit -m "update sent links" || echo "No changes"
+          git push
