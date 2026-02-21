@@ -54,7 +54,8 @@ def real_link(url):
     try:
         r = requests.get(url, timeout=10, allow_redirects=True)
         return r.url
-    except:
+    except Exception as e:
+        logging.warning(f"Link resolve error: {url} → {e}")
         return url
 
 async def send_news(title, link, image=None):
@@ -70,24 +71,32 @@ async def send_news(title, link, image=None):
             await bot.send_photo(CHANNEL_ID, image, caption=text, parse_mode="HTML")
         else:
             await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
+        logging.info(f"Sent: {title}")
     except Exception as e:
-        logging.error(e)
+        logging.error(f"Telegram send error: {e}")
 
 async def main():
     sent = load_sent()
+    print(f"Loaded {len(sent)} sent links.")
 
     for rss in RSS_URLS:
+        print(f"Parsing RSS: {rss}")
         feed = feedparser.parse(rss)
+
+        if not feed.entries:
+            print(f"No entries found for: {rss}")
+            continue
 
         for entry in feed.entries[:MAX_NEWS_PER_FEED]:
             link = real_link(entry.link)
             h = hashlib.md5(link.encode()).hexdigest()
 
             if h in sent:
+                print(f"Already sent: {entry.title}")
                 continue
 
             image = None
-            if "media_content" in entry:
+            if hasattr(entry, "media_content") and entry.media_content:
                 image = entry.media_content[0]["url"]
 
             await send_news(entry.title, link, image)
@@ -95,6 +104,13 @@ async def main():
             await asyncio.sleep(2)
 
     save_sent(sent)
+    print(f"Saved {len(sent)} total links.")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import traceback
+    try:
+        print("BOT STARTING...")
+        asyncio.run(main())
+    except Exception as e:
+        print("CRASHED!")
+        traceback.print_exc()
