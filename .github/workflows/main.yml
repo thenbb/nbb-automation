@@ -2,11 +2,11 @@ name: NBB News Bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # hər 5 dəqiqə run
+    - cron: "*/5 * * * *"   # hər 5 dəqiqə run
   workflow_dispatch:          # manual run
 
 permissions:
-  contents: write  # sent_links.txt commit üçün
+  contents: write             # sent_links.txt commit üçün
 
 jobs:
   run-bot:
@@ -28,8 +28,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-     8     pip install feedparser
-          pip install python-telegram-bot
+          pip install feedparser
+          pip install python-telegram-bot --upgrade
           pip install requests
           pip install googletrans==4.0.0-rc1
 
