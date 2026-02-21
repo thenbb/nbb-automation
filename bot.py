@@ -29,7 +29,6 @@ bot = Bot(token=TOKEN)
 translator = Translator()
 
 # ---------- HELPER FUNCTIONS ----------
-
 def load_sent():
     try:
         with open(SENT_FILE, "r") as f:
@@ -44,22 +43,22 @@ def save_sent(data):
 
 def real_link(url):
     try:
-        r = requests.get(url, timeout=15, allow_redirects=True)
+        r = requests.get(url, timeout=10, allow_redirects=True)
         return r.url
     except Exception as e:
         logging.warning(f"Link resolve error: {url} → {e}")
         return url
 
-async def send_news(title_en, link, image=None, video=None):
+async def send_news(title_en, link, image=None):
     # Translate once per language
     try:
         title_az = translator.translate(title_en, src='en', dest='az').text
         title_ru = translator.translate(title_en, src='en', dest='ru').text
-    except Exception as e:
-        logging.warning(f"Translation failed: {e}")
+    except Exception:
         title_az = title_en
         title_ru = title_en
 
+    # Prepare message with all 3 languages
     text = f"""🌍 <b>NBB WORLD NEWS</b>
 
 📰 {title_en} (EN)
@@ -70,9 +69,7 @@ async def send_news(title_en, link, image=None, video=None):
 """
 
     try:
-        if video:
-            await bot.send_video(CHANNEL_ID, video, caption=text, parse_mode="HTML")
-        elif image:
+        if image:
             await bot.send_photo(CHANNEL_ID, image, caption=text, parse_mode="HTML")
         else:
             await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
@@ -81,7 +78,6 @@ async def send_news(title_en, link, image=None, video=None):
         logging.error(f"Telegram send error: {e}")
 
 # ---------- MAIN LOOP ----------
-
 async def main():
     sent = load_sent()
 
@@ -98,25 +94,16 @@ async def main():
                 continue
 
             image = None
-            video = None
-
-            # Media detection
             if "media_content" in entry:
-                for m in entry.media_content:
-                    if "video" in m["type"]:
-                        video = m["url"]
-                    elif "image" in m["type"]:
-                        image = m["url"]
+                image = entry.media_content[0]["url"]
             elif "links" in entry:
                 for l in entry.links:
-                    if l.type.startswith("image") and not image:
+                    if l.type.startswith("image"):
                         image = l.href
-                    if l.type.startswith("video") and not video:
-                        video = l.href
 
-            await send_news(entry.title, link, image, video)
+            await send_news(entry.title, link, image)
             sent.add(h)
-            await asyncio.sleep(1)  # Telegram rate limit
+            await asyncio.sleep(1)
 
     save_sent(sent)
 
