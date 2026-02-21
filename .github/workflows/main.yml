@@ -2,11 +2,11 @@ name: NBB News Bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # hər 5 dəqiqə
-  workflow_dispatch:
+    - cron: "*/5 * * * *"  # hər 5 dəqiqə run
+  workflow_dispatch:          # manual run
 
 permissions:
-  contents: write
+  contents: write  # sent_links.txt commit üçün
 
 jobs:
   run-bot:
@@ -23,18 +23,25 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
       - name: Install dependencies
-        run: pip install feedparser python-telegram-bot requests googletrans==4.0.0-rc1
+        run: |
+     8     pip install feedparser
+          pip install python-telegram-bot
+          pip install requests
+          pip install googletrans==4.0.0-rc1
 
       - name: Run bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: python bot.py
 
-      - name: Commit sent_links.txt to prevent duplicates
+      - name: Save sent links (prevent duplicates)
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
-          git add sent_links.txt || echo "No sent_links.txt changes"
-          git commit -m "Update sent_links.txt: prevent duplicate news" || echo "No new links to commit"
+          git add sent_links.txt || true
+          git commit -m "update sent links" || echo "No changes"
           git push
