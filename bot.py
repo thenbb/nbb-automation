@@ -5,7 +5,6 @@ import asyncio
 import logging
 import hashlib
 import requests
-from googletrans import Translator
 
 TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "@NBBWorld"
@@ -13,10 +12,12 @@ CHANNEL_ID = "@NBBWorld"
 RSS_URLS = [
     "https://www.aljazeera.com/xml/rss/all.xml",
     "https://feeds.bbci.co.uk/news/world/rss.xml",
-    "https://www.france24.com/en/rss",
-    "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
-    "http://rss.cnn.com/rss/edition_world.rss",
-    "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+    "https://rss.cnn.com/rss/edition_world.rss",
+    "https://www.theguardian.com/world/rss",
+    "https://feeds.skynews.com/feeds/rss/world.xml",
+    "https://feeds.feedburner.com/TechCrunch/",
+    "https://www.theverge.com/rss/index.xml",
+    "https://www.cnbc.com/id/100003114/device/rss/rss.html"
 ]
 
 SENT_FILE = "sent_links.txt"
@@ -24,7 +25,6 @@ MAX_NEWS_PER_FEED = 2
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
-translator = Translator()
 
 def load_sent():
     try:
@@ -45,21 +45,10 @@ def real_link(url):
     except:
         return url
 
-def safe_translate(text, lang):
-    try:
-        return translator.translate(text, dest=lang).text
-    except:
-        return text
-
 async def send_news(title, link, image=None):
-    az = safe_translate(title, "az")
-    ru = safe_translate(title, "ru")
-
     text = f"""🌍 <b>NBB WORLD NEWS</b>
 
 📰 {title}
-📰 {az}
-📰 {ru}
 
 🔗 <a href="{link}">Read full article</a>
 """
