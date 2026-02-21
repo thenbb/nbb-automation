@@ -5,7 +5,6 @@ import asyncio
 import logging
 import hashlib
 import requests
-import html
 from googletrans import Translator  # pip install googletrans==4.0.0-rc1
 
 # ================== SETTINGS ==================
@@ -13,71 +12,75 @@ TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "@NBBWorld"
 
 RSS_URLS = [
-    "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
     "https://www.aljazeera.com/xml/rss/all.xml",
-    "https://feeds.bbci.co.uk/news/rss.xml",
+    "https://feeds.bbci.co.uk/news/world/rss.xml",
     "https://www.france24.com/en/rss",
     "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
-    "http://rss.cnn.com/rss/edition_world.rss"
+    "http://rss.cnn.com/rss/edition_world.rss",
+    "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
 ]
 
 SENT_FILE = "sent_links.txt"
 MAX_NEWS_PER_FEED = 2
-TARGET_LANGS = ["az", "ru"]  # Avtomatik tərcümə üçün dillər
+# ==============================================
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 translator = Translator()
-# ==============================================
+
+# ---------- HELPER FUNCTIONS ----------
 
 def load_sent():
     try:
-        with open(SENT_FILE, "r", encoding="utf-8") as f:
+        with open(SENT_FILE, "r") as f:
             return set(f.read().splitlines())
-    except FileNotFoundError:
+    except:
         return set()
 
 def save_sent(data):
-    with open(SENT_FILE, "w", encoding="utf-8") as f:
+    with open(SENT_FILE, "w") as f:
         for x in data:
             f.write(x + "\n")
 
-def resolve_link(url):
-    """Google News redirect linkləri həll et"""
+def real_link(url):
     try:
-        r = requests.get(url, timeout=5, allow_redirects=True)
+        r = requests.get(url, timeout=15, allow_redirects=True)
         return r.url
-    except Exception:
+    except Exception as e:
+        logging.warning(f"Link resolve error: {url} → {e}")
         return url
 
-def generate_hash(title, link):
-    """Title + link hash → duplicate protection daha stabil"""
-    return hashlib.md5((title + link).encode("utf-8")).hexdigest()
+async def send_news(title_en, link, image=None, video=None):
+    # Translate once per language
+    try:
+        title_az = translator.translate(title_en, src='en', dest='az').text
+        title_ru = translator.translate(title_en, src='en', dest='ru').text
+    except Exception as e:
+        logging.warning(f"Translation failed: {e}")
+        title_az = title_en
+        title_ru = title_en
 
-async def send_news(title, link, image=None, videos=None):
-    """Telegram-a göndərmə"""
-    text = f"🌍 <b>NBB WORLD NEWS</b>\n\n📰 <b>{html.escape(title)}</b>\n\n🔗 <a href='{link}'>Read full article</a>"
+    text = f"""🌍 <b>NBB WORLD NEWS</b>
 
-    # Video varsa, öncə video göndər, sonra şəkil
-    if videos:
-        for video_url in videos:
-            try:
-                await bot.send_video(CHANNEL_ID, video_url, caption=text, parse_mode="HTML")
-                logging.info(f"Video göndərildi: {title}")
-            except Exception as e:
-                logging.warning(f"Video göndərmə xətası: {e}")
-    elif image:
-        try:
+📰 {title_en} (EN)
+📰 {title_az} (AZ)
+📰 {title_ru} (RU)
+
+🔗 <a href="{link}">Read full article</a>
+"""
+
+    try:
+        if video:
+            await bot.send_video(CHANNEL_ID, video, caption=text, parse_mode="HTML")
+        elif image:
             await bot.send_photo(CHANNEL_ID, image, caption=text, parse_mode="HTML")
-            logging.info(f"Şəkil göndərildi: {title}")
-        except Exception as e:
-            logging.warning(f"Şəkil göndərmə xətası: {e}")
-    else:
-        try:
+        else:
             await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
-            logging.info(f"Mesaj göndərildi: {title}")
-        except Exception as e:
-            logging.warning(f"Mesaj göndərmə xətası: {e}")
+        logging.info(f"Sent: {title_en}")
+    except Exception as e:
+        logging.error(f"Telegram send error: {e}")
+
+# ---------- MAIN LOOP ----------
 
 async def main():
     sent = load_sent()
@@ -85,43 +88,35 @@ async def main():
     for rss in RSS_URLS:
         feed = feedparser.parse(rss)
         if not feed.entries:
-            logging.warning(f"RSS işləmədi: {rss}")
+            logging.warning(f"RSS empty or failed: {rss}")
             continue
 
         for entry in feed.entries[:MAX_NEWS_PER_FEED]:
-            link = resolve_link(entry.link)
-            h = generate_hash(entry.title, link)
+            link = real_link(entry.link)
+            h = hashlib.md5(link.encode()).hexdigest()
             if h in sent:
                 continue
 
-            # Media
             image = None
-            videos = []
+            video = None
 
+            # Media detection
             if "media_content" in entry:
                 for m in entry.media_content:
-                    if "video" in m.get("type", ""):
-                        videos.append(m.get("url"))
-                    elif "image" in m.get("type", ""):
-                        image = m.get("url")
-
+                    if "video" in m["type"]:
+                        video = m["url"]
+                    elif "image" in m["type"]:
+                        image = m["url"]
             elif "links" in entry:
                 for l in entry.links:
-                    if l.type.startswith("image"):
+                    if l.type.startswith("image") and not image:
                         image = l.href
-                    elif "video" in l.type:
-                        videos.append(l.href)
+                    if l.type.startswith("video") and not video:
+                        video = l.href
 
-            # Avtomatik tərcümə
-            for lang in TARGET_LANGS:
-                try:
-                    translated_title = translator.translate(entry.title, dest=lang).text
-                    await send_news(translated_title, link, image=image, videos=videos)
-                except Exception as e:
-                    logging.warning(f"Tərcümə xətası ({lang}): {e}")
-
+            await send_news(entry.title, link, image, video)
             sent.add(h)
-            await asyncio.sleep(2)
+            await asyncio.sleep(1)  # Telegram rate limit
 
     save_sent(sent)
 
