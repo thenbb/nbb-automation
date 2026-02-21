@@ -49,8 +49,7 @@ def real_link(url):
         logging.warning(f"Link resolve error: {url} → {e}")
         return url
 
-async def send_news(title_en, link, image=None):
-    # Translate once per language
+async def send_news(title_en, link, image=None, video=None):
     try:
         title_az = translator.translate(title_en, src='en', dest='az').text
         title_ru = translator.translate(title_en, src='en', dest='ru').text
@@ -58,7 +57,6 @@ async def send_news(title_en, link, image=None):
         title_az = title_en
         title_ru = title_en
 
-    # Prepare message with all 3 languages
     text = f"""🌍 <b>NBB WORLD NEWS</b>
 
 📰 {title_en} (EN)
@@ -69,7 +67,9 @@ async def send_news(title_en, link, image=None):
 """
 
     try:
-        if image:
+        if video:
+            await bot.send_video(CHANNEL_ID, video, caption=text, parse_mode="HTML")
+        elif image:
             await bot.send_photo(CHANNEL_ID, image, caption=text, parse_mode="HTML")
         else:
             await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
@@ -94,14 +94,23 @@ async def main():
                 continue
 
             image = None
+            video = None
+
+            # Check for images
             if "media_content" in entry:
-                image = entry.media_content[0]["url"]
+                for media in entry.media_content:
+                    if media.get("medium") == "image":
+                        image = media.get("url")
+                    elif media.get("medium") == "video":
+                        video = media.get("url")
             elif "links" in entry:
                 for l in entry.links:
                     if l.type.startswith("image"):
                         image = l.href
+                    elif l.type.startswith("video"):
+                        video = l.href
 
-            await send_news(entry.title, link, image)
+            await send_news(entry.title, link, image=image, video=video)
             sent.add(h)
             await asyncio.sleep(1)
 
