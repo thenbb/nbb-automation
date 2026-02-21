@@ -40,7 +40,4 @@ jobs:
       - name: Save sent links (prevent duplicates)
         run: |
           git config --global user.name "github-actions"
-          git config --global user.email "actions@github.com"
-          git add sent_links.txt || true
-          git commit -m "update sent links" || echo "No changes"
-          git push
+          git config --global user.email "
