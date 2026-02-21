@@ -5,9 +5,8 @@ import asyncio
 import logging
 import hashlib
 import requests
-from googletrans import Translator  # pip install googletrans==4.0.0-rc1
 
-# ================== SETTINGS ==================
+# ===== SETTINGS =====
 TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "@NBBWorld"
 
@@ -17,18 +16,15 @@ RSS_URLS = [
     "https://www.france24.com/en/rss",
     "https://www.reutersagency.com/feed/?best-topics=world&post_type=best",
     "http://rss.cnn.com/rss/edition_world.rss",
-    "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
 ]
 
 SENT_FILE = "sent_links.txt"
 MAX_NEWS_PER_FEED = 2
-# ==============================================
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
-translator = Translator()
 
-# ---------- HELPER FUNCTIONS ----------
+# ===== HELPER FUNCTIONS =====
 def load_sent():
     try:
         with open(SENT_FILE, "r") as f:
@@ -45,17 +41,13 @@ def real_link(url):
     try:
         r = requests.get(url, timeout=10, allow_redirects=True)
         return r.url
-    except Exception as e:
-        logging.warning(f"Link resolve error: {url} → {e}")
+    except:
         return url
 
-async def send_news(title_en, link, image=None, video=None):
-    try:
-        title_az = translator.translate(title_en, src='en', dest='az').text
-        title_ru = translator.translate(title_en, src='en', dest='ru').text
-    except Exception:
-        title_az = title_en
-        title_ru = title_en
+async def send_news(title_en, link, image=None):
+    # Translation fallback: EN only for now
+    title_az = title_en
+    title_ru = title_en
 
     text = f"""🌍 <b>NBB WORLD NEWS</b>
 
@@ -67,9 +59,7 @@ async def send_news(title_en, link, image=None, video=None):
 """
 
     try:
-        if video:
-            await bot.send_video(CHANNEL_ID, video, caption=text, parse_mode="HTML")
-        elif image:
+        if image:
             await bot.send_photo(CHANNEL_ID, image, caption=text, parse_mode="HTML")
         else:
             await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
@@ -77,7 +67,7 @@ async def send_news(title_en, link, image=None, video=None):
     except Exception as e:
         logging.error(f"Telegram send error: {e}")
 
-# ---------- MAIN LOOP ----------
+# ===== MAIN LOOP =====
 async def main():
     sent = load_sent()
 
@@ -94,27 +84,21 @@ async def main():
                 continue
 
             image = None
-            video = None
-
-            # Check for images
             if "media_content" in entry:
-                for media in entry.media_content:
-                    if media.get("medium") == "image":
-                        image = media.get("url")
-                    elif media.get("medium") == "video":
-                        video = media.get("url")
+                image = entry.media_content[0]["url"]
             elif "links" in entry:
                 for l in entry.links:
                     if l.type.startswith("image"):
                         image = l.href
-                    elif l.type.startswith("video"):
-                        video = l.href
 
-            await send_news(entry.title, link, image=image, video=video)
+            await send_news(entry.title, link, image)
             sent.add(h)
             await asyncio.sleep(1)
 
     save_sent(sent)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        logging.error(f"Main crash: {e}")
