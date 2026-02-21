@@ -2,11 +2,11 @@ name: NBB News Bot
 
 on:
   schedule:
-    - cron: "*/5 * * * *" # hər 5 dəqiqə run
-  workflow_dispatch:       # manual run
+    - cron: "*/5 * * * *"  # hər 5 dəqiqə run
+  workflow_dispatch:        # manual run
 
 permissions:
-  contents: write          # sent_links.txt commit üçün
+  contents: write           # sent_links.txt commit üçün
 
 jobs:
   run-bot:
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          persist-credentials: true  # git push üçün token saxlanır
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -40,4 +40,7 @@ jobs:
       - name: Save sent links (prevent duplicates)
         run: |
           git config --global user.name "github-actions"
-          git config --global user.email "
+          git config --global user.email "actions@github.com"
+          git add sent_links.txt
+          git commit -m "update sent links" || echo "No changes"
+          git push origin HEAD:main || echo "Push failed, check branch name"
