@@ -10,14 +10,26 @@ TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "@NBBWorld"
 
 RSS_URLS = [
+    # 🌍 WORLD NEWS
     "https://www.aljazeera.com/xml/rss/all.xml",
     "https://feeds.bbci.co.uk/news/world/rss.xml",
     "https://rss.cnn.com/rss/edition_world.rss",
     "https://www.theguardian.com/world/rss",
     "https://feeds.skynews.com/feeds/rss/world.xml",
+
+    # 💻 TECHNOLOGY
     "https://feeds.feedburner.com/TechCrunch/",
     "https://www.theverge.com/rss/index.xml",
-    "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+    "https://www.wired.com/feed/rss",
+
+    # 💰 BUSINESS
+    "https://feeds.bloomberg.com/markets/news.rss",
+    "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+
+    # 🔬 SCIENCE
+    "https://www.sciencedaily.com/rss/top/science.xml",
+    "https://www.nature.com/subjects/science.rss",
+    "https://www.sciencenews.org/feed"
 ]
 
 SENT_FILE = "sent_links.txt"
