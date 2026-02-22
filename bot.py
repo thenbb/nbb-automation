@@ -5,6 +5,7 @@ import asyncio
 import logging
 import hashlib
 import requests
+import subprocess  # Manual run üçün git pull
 
 TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = "@NBBWorld"
@@ -38,6 +39,14 @@ MAX_NEWS_PER_FEED = 2
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
 
+# Manual run üçün həmişə son sent_links.txt-i GitHub-dan çəkmək
+def git_pull_sent_file():
+    try:
+        subprocess.run(["git", "pull"], check=True)
+        print("Latest sent_links.txt pulled from GitHub")
+    except Exception as e:
+        print("Git pull failed:", e)
+
 def load_sent():
     try:
         with open(SENT_FILE, "r") as f:
@@ -65,7 +74,6 @@ async def send_news(title, link, image=None):
 
 🔗 <a href="{link}">Read full article</a>
 """
-
     try:
         if image:
             await bot.send_photo(CHANNEL_ID, image, caption=text, parse_mode="HTML")
@@ -76,6 +84,7 @@ async def send_news(title, link, image=None):
         logging.error(f"Telegram send error: {e}")
 
 async def main():
+    git_pull_sent_file()  # <-- Manual run üçün əlavə edildi
     sent = load_sent()
     print(f"Loaded {len(sent)} sent links.")
 
