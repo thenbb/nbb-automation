@@ -325,29 +325,36 @@ async def main():
     candidates = fetch_candidates()
     unique = []
     current_run_keys = set()
-
+       
     for item in candidates:
-        link = resolve_link(item["link"])
+        original_link = item["link"]
+        link = resolve_link(original_link)
+
         url_key, title_key = article_keys(
             link, item["title"]
         )
 
-        if url_key in sent or title_key in sent:
+        legacy_keys = {
+            hashlib.md5(link.encode("utf-8")).hexdigest(),
+            hashlib.md5(clean_url(link).encode("utf-8")).hexdigest(),
+            hashlib.md5(original_link.encode("utf-8")).hexdigest(),
+            hashlib.md5(clean_url(original_link).encode("utf-8")).hexdigest(),
+        }
+
+        keys = {url_key, title_key, *legacy_keys}
+
+        if keys.intersection(sent):
             log.info("Already sent: %s", item["title"])
             continue
 
-        if (
-            url_key in current_run_keys
-            or title_key in current_run_keys
-        ):
+        if keys.intersection(current_run_keys):
             log.info("Duplicate in this run: %s", item["title"])
             continue
 
         item["link"] = link
-        item["keys"] = (url_key, title_key)
+        item["keys"] = keys
         unique.append(item)
-
-        current_run_keys.update((url_key, title_key))
+        current_run_keys.update(keys)
 
     posted = 0
 
